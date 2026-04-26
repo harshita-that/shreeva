@@ -14,7 +14,10 @@ export default function ImageUpload({ label, value, onChange, onError }) {
     const formData = new FormData()
     formData.append('image', file)
     try {
-      const res = await api.post('/upload', formData)
+      const token = localStorage.getItem('shreeva_admin_token')
+      const res = await api.post('/upload', formData, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
       onChange(res.data.url)
     } catch (err) {
       const msg = err.response?.data?.error || err.message || 'Upload failed. Please try again.'

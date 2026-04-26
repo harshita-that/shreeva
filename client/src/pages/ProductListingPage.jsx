@@ -4,6 +4,7 @@ import Footer from '../components/Footer'
 import GoldRateTicker from '../components/GoldRateTicker'
 import FilterBar from '../components/FilterBar'
 import ProductGrid from '../components/ProductGrid'
+import Breadcrumb from '../components/Breadcrumb'
 import api from '../api/axios.js'
 
 export default function ProductListingPage() {
@@ -14,13 +15,14 @@ export default function ProductListingPage() {
 
   const applyFilters = (products, { category, sort }) => {
     let result = [...products]
+    // DB stores category in lowercase — compare lowercase both sides
     if (category) {
-      result = result.filter(p => p.category === category)
+      result = result.filter(p => p.category === category.toLowerCase())
     }
     if (sort === 'price-low') {
-      result.sort((a, b) => a.final_price - b.final_price)
+      result.sort((a, b) => a.finalPrice - b.finalPrice)
     } else if (sort === 'price-high') {
-      result.sort((a, b) => b.final_price - a.final_price)
+      result.sort((a, b) => b.finalPrice - a.finalPrice)
     }
     return result
   }
@@ -29,11 +31,13 @@ export default function ProductListingPage() {
     const fetchProducts = () => {
       api.get('/products')
         .then(res => {
-          setAllProducts(res.data)
-          setFiltered(prev => applyFilters(res.data, filterCriteria))
+          // API returns { success, count, products: [...] }
+          const products = res.data.products || []
+          setAllProducts(products)
+          setFiltered(applyFilters(products, filterCriteria))
           setLoading(false)
         })
-        .catch(console.error)
+        .catch(() => setLoading(false))
     }
     fetchProducts()
     const interval = setInterval(fetchProducts, 15000)
@@ -49,12 +53,16 @@ export default function ProductListingPage() {
     <div>
       <Navbar />
       <GoldRateTicker />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 py-8 md:py-12">
-        <p className="text-xs sm:text-sm uppercase tracking-widest text-gold mb-2 font-body">Collection</p>
-        <h1 className="font-heading text-3xl sm:text-4xl md:text-5xl font-bold text-dark mb-4 md:mb-6">All Jewellery</h1>
+      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: 'clamp(2.5rem,5vw,4rem) clamp(1rem,4vw,3rem)' }}>
+        <Breadcrumb crumbs={[
+          { label: 'Home',       to: '/' },
+          { label: 'Collection' },
+        ]} />
+        <p style={{ fontFamily: "'Jost',sans-serif", fontSize: '10px', letterSpacing: '0.26em', textTransform: 'uppercase', color: '#C9A84C', marginBottom: '6px' }}>Collection</p>
+        <h1 style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 'clamp(2rem,5vw,3.5rem)', fontWeight: 400, color: '#1C1C1C', marginBottom: 'clamp(1.5rem,3vw,2.5rem)', letterSpacing: '0.02em', lineHeight: 1.1 }}>All Jewellery</h1>
         <FilterBar onFilterChange={handleFilter} />
         {loading ? (
-          <div className="py-20 text-center font-body text-dark/60">Loading...</div>
+          <div style={{ padding: '4rem 0', textAlign: 'center', fontFamily: "'Jost',sans-serif", fontSize: '11px', letterSpacing: '0.14em', color: 'rgba(28,28,28,0.35)', textTransform: 'uppercase' }}>Loading...</div>
         ) : (
           <ProductGrid products={filtered} />
         )}

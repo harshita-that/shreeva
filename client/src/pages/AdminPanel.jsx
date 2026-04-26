@@ -1,357 +1,178 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import Navbar from '../components/Navbar'
-import ImageUpload from '../components/ImageUpload'
-import api from '../api/axios.js'
+import { useNavigate, Link } from 'react-router-dom'
+import AdminOverview   from '../components/admin/AdminOverview'
+import AdminProducts   from '../components/admin/AdminProducts'
+import AdminPricing    from '../components/admin/AdminPricing'
+import AdminEnquiries  from '../components/admin/AdminEnquiries'
+import AdminMedia      from '../components/admin/AdminMedia'
+import AdminSettings   from '../components/admin/AdminSettings'
 
-const EMPTY_FORM = { name: '', weight: '', making_charges: '', image_url: '', hover_image_url: '', category: '', description: '' }
+const NAV = [
+  { id: 'overview',   icon: '◈', label: 'Overview' },
+  { id: 'products',   icon: '◇', label: 'Products' },
+  { id: 'pricing',    icon: '◆', label: 'Pricing' },
+  { id: 'enquiries',  icon: '◉', label: 'Enquiries' },
+  { id: 'media',      icon: '▣', label: 'Media' },
+  { id: 'settings',   icon: '◎', label: 'Settings' },
+]
+
+const VIEWS = {
+  overview:  AdminOverview,
+  products:  AdminProducts,
+  pricing:   AdminPricing,
+  enquiries: AdminEnquiries,
+  media:     AdminMedia,
+  settings:  AdminSettings,
+}
 
 export default function AdminPanel() {
   const navigate = useNavigate()
-  const [goldRate, setGoldRate] = useState(0)
-  const [goldRateUpdated, setGoldRateUpdated] = useState(null)
-  const [newRate, setNewRate] = useState('')
-  const [products, setProducts] = useState([])
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editingProduct, setEditingProduct] = useState(null)
-  const [form, setForm] = useState({ ...EMPTY_FORM })
-  const [status, setStatus] = useState('')
-  const [error, setError] = useState('')
+  const [view, setView]         = useState('overview')
+  const [collapsed, setCollapsed] = useState(false)
+  const admin = JSON.parse(localStorage.getItem('shreeva_admin_user') || '{}')
 
   useEffect(() => {
-    if (localStorage.getItem('aura_admin_auth') !== 'true') {
-      navigate('/admin/login')
-    }
+    if (!localStorage.getItem('shreeva_admin_token')) navigate('/admin/login')
   }, [navigate])
 
   const handleLogout = () => {
-    localStorage.removeItem('aura_admin_auth')
+    localStorage.removeItem('shreeva_admin_token')
+    localStorage.removeItem('shreeva_admin_user')
     navigate('/admin/login')
   }
 
-  const fetchGoldRate = () => {
-    api.get('/gold-price').then(res => {
-      setGoldRate(res.data.price_per_gram)
-      setNewRate(res.data.price_per_gram)
-      setGoldRateUpdated(res.data.updated_at)
-    }).catch(console.error)
-  }
-
-  const fetchProducts = () => {
-    api.get('/products').then(res => setProducts(res.data)).catch(console.error)
-  }
-
-  useEffect(() => {
-    fetchGoldRate()
-    fetchProducts()
-  }, [])
-
-  useEffect(() => {
-    if (status || error) {
-      const t = setTimeout(() => { setStatus(''); setError('') }, 4000)
-      return () => clearTimeout(t)
-    }
-  }, [status, error])
-
-  const handleUpdateGoldRate = async () => {
-    try {
-      await api.put('/gold-price', { price_per_gram: Number(newRate) })
-      setStatus('Gold rate updated successfully')
-      fetchGoldRate()
-      fetchProducts()
-    } catch {
-      setError('Failed to update gold rate')
-    }
-  }
-
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value })
-  }
-
-  const openModal = (product = null) => {
-    setError('')
-    if (product) {
-      setEditingProduct(product)
-      setForm({
-        name: product.name,
-        weight: product.weight,
-        making_charges: product.making_charges,
-        image_url: product.image_url || '',
-        hover_image_url: product.hover_image_url || '',
-        category: product.category,
-        description: product.description || ''
-      })
-    } else {
-      setEditingProduct(null)
-      setForm({ ...EMPTY_FORM })
-    }
-    setModalOpen(true)
-  }
-
-  const closeModal = () => {
-    setModalOpen(false)
-    setEditingProduct(null)
-    setForm({ ...EMPTY_FORM })
-    setError('')
-  }
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    setError('')
-
-    if (!form.image_url.trim()) {
-      setError('Product image is required. Please upload a default image.')
-      return
-    }
-
-    try {
-      if (editingProduct) {
-        await api.put(`/products/${editingProduct._id}`, form)
-        setStatus('Product updated successfully')
-      } else {
-        await api.post('/products', form)
-        setStatus('Product added successfully')
-      }
-      closeModal()
-      fetchProducts()
-    } catch {
-      setError('Failed to save product. Please try again.')
-    }
-  }
-
-  const handleDelete = async (id) => {
-    if (!confirm('Delete this product?')) return
-    try {
-      await api.delete(`/products/${id}`)
-      setStatus('Product deleted')
-      fetchProducts()
-    } catch {
-      setError('Failed to delete product')
-    }
-  }
-
-  const formatPrice = (price) => {
-    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(price)
-  }
+  const ActiveView = VIEWS[view]
 
   return (
-    <div className="min-h-screen bg-[#FAFAF7]">
-      <Navbar />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 py-8 md:py-12">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8 md:mb-10">
-          <h1 className="font-heading text-3xl sm:text-4xl font-bold text-dark">Admin Panel</h1>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => openModal()}
-              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-dark text-cream font-body uppercase tracking-widest text-xs hover:bg-gold transition-colors duration-300"
-            >
-              <span className="text-lg leading-none">+</span>
-              Add Product
-            </button>
-            <button
-              onClick={handleLogout}
-              className="px-6 py-3 border border-[#C9A84C] font-body uppercase tracking-widest text-xs hover:bg-dark hover:text-[#FAFAF7] transition-colors duration-300"
-            >
-              Logout
-            </button>
-          </div>
-        </div>
+    <div style={{ display:'flex', minHeight:'100vh', background:'#F5F0E8', fontFamily:"'Jost',sans-serif" }}>
+      <style>{`
+        *{box-sizing:border-box;margin:0;padding:0}
+        .adm-sidebar{width:${collapsed?'68px':'220px'};min-height:100vh;background:#1C1C1C;display:flex;flex-direction:column;transition:width 0.3s ease;flex-shrink:0;position:sticky;top:0;height:100vh;overflow:hidden}
+        .adm-nav-btn{display:flex;align-items:center;gap:14px;padding:12px 20px;cursor:pointer;border:none;background:none;width:100%;text-align:left;color:rgba(255,255,255,0.5);font-family:'Jost',sans-serif;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;transition:all 0.2s;white-space:nowrap}
+        .adm-nav-btn:hover{color:#C9A84C;background:rgba(201,168,76,0.08)}
+        .adm-nav-btn.active{color:#C9A84C;background:rgba(201,168,76,0.12);border-right:2px solid #C9A84C}
+        .adm-nav-icon{font-size:16px;flex-shrink:0;width:20px;text-align:center;color:#C9A84C}
+        .adm-main{flex:1;display:flex;flex-direction:column;min-height:100vh;overflow:auto}
+        .adm-header{background:#fff;border-bottom:1px solid rgba(201,168,76,0.2);padding:0 28px;height:58px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+        .adm-content{padding:28px;flex:1}
+        .card{background:#fff;border-radius:10px;box-shadow:0 2px 12px rgba(28,28,28,0.06);border:1px solid rgba(201,168,76,0.15)}
+        .metric-card{background:#fff;border-radius:10px;padding:22px 24px;box-shadow:0 2px 12px rgba(28,28,28,0.06);border:1px solid rgba(201,168,76,0.12);transition:box-shadow 0.2s,transform 0.2s}
+        .metric-card:hover{box-shadow:0 6px 24px rgba(28,28,28,0.1);transform:translateY(-2px)}
+        .btn-gold{background:#C9A84C;color:#1C1C1C;border:none;padding:9px 20px;font-family:'Jost',sans-serif;font-size:11px;letter-spacing:0.15em;text-transform:uppercase;cursor:pointer;border-radius:4px;transition:background 0.2s}
+        .btn-gold:hover{background:#b8963e}
+        .btn-dark{background:#1C1C1C;color:#FAFAF7;border:none;padding:9px 20px;font-family:'Jost',sans-serif;font-size:11px;letter-spacing:0.15em;text-transform:uppercase;cursor:pointer;border-radius:4px;transition:background 0.2s}
+        .btn-dark:hover{background:#333}
+        .btn-outline{background:transparent;color:#1C1C1C;border:1px solid rgba(201,168,76,0.5);padding:8px 18px;font-family:'Jost',sans-serif;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;cursor:pointer;border-radius:4px;transition:all 0.2s}
+        .btn-outline:hover{border-color:#C9A84C;background:rgba(201,168,76,0.06)}
+        .skeleton{background:linear-gradient(90deg,#f0ede6 25%,#e8e4dc 50%,#f0ede6 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:6px}
+        @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+        .tag{display:inline-block;padding:3px 10px;border-radius:20px;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;font-weight:500}
+        .tag-new{background:#fef9ec;color:#b8880e;border:1px solid #f5d87a}
+        .tag-contacted{background:#f0faf5;color:#1a7a4a;border:1px solid #86d4ae}
+        .tag-closed{background:#f5f5f5;color:#888;border:1px solid #ddd}
+        table{width:100%;border-collapse:collapse}
+        th{font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:rgba(28,28,28,0.45);padding:10px 16px;text-align:left;border-bottom:1px solid rgba(201,168,76,0.15);font-weight:500}
+        td{padding:12px 16px;border-bottom:1px solid rgba(201,168,76,0.08);font-size:13px;color:#1C1C1C;vertical-align:middle}
+        tr:last-child td{border-bottom:none}
+        tr:hover td{background:rgba(201,168,76,0.03)}
+        input,select,textarea{font-family:'Jost',sans-serif;font-size:13px;color:#1C1C1C;outline:none}
+        .form-field label{display:block;font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:#C9A84C;margin-bottom:6px}
+        .form-field input,.form-field select,.form-field textarea{width:100%;border:1px solid rgba(201,168,76,0.4);border-radius:4px;padding:9px 12px;background:transparent;transition:border 0.2s}
+        .form-field input:focus,.form-field select:focus,.form-field textarea:focus{border-color:#1C1C1C}
+        .overlay{position:fixed;inset:0;background:rgba(28,28,28,0.5);backdrop-filter:blur(4px);z-index:100;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.2s ease}
+        .modal{background:#fff;border-radius:12px;padding:32px;width:90%;max-width:520px;max-height:90vh;overflow-y:auto;animation:scaleIn 0.25s ease;box-shadow:0 24px 64px rgba(28,28,28,0.18)}
+        @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+        @keyframes scaleIn{from{opacity:0;transform:scale(0.96)}to{opacity:1;transform:scale(1)}}
+        .section-title{font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:600;color:#1C1C1C;margin-bottom:4px}
+        .section-sub{font-size:11px;color:rgba(28,28,28,0.45);letter-spacing:0.06em}
+        @media(max-width:640px){.adm-sidebar{display:none}.adm-content{padding:16px}}
+      `}</style>
 
-        {/* Status Messages */}
-        {status && (
-          <div className="mb-6 border border-green-200 bg-green-50 px-4 py-3 transition-all duration-300">
-            <p className="font-body text-sm text-green-800">{status}</p>
-          </div>
-        )}
-        {error && !modalOpen && (
-          <div className="mb-6 border border-red-200 bg-red-50 px-4 py-3 transition-all duration-300">
-            <p className="font-body text-sm text-red-800">{error}</p>
-          </div>
-        )}
-
-        {/* Gold Rate Card */}
-        <div className="border border-[#C9A84C] p-5 sm:p-6 mb-8 md:mb-10 bg-white">
-          <p className="font-body text-xs uppercase tracking-widest text-[#C9A84C] mb-4">Gold Price Management</p>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
-            <div>
-              <p className="font-body text-sm text-dark/60">Current Rate</p>
-              <p className="font-heading text-xl sm:text-2xl font-bold text-dark mt-0.5">{formatPrice(goldRate)} / gram</p>
-              {goldRateUpdated && (
-                <p className="font-body text-[11px] text-dark/40 mt-1">
-                  Last updated {new Date(goldRateUpdated).toLocaleString()}
-                </p>
-              )}
+      {/* Sidebar */}
+      <aside className="adm-sidebar">
+        <div style={{padding:'20px 16px 12px',borderBottom:'1px solid rgba(255,255,255,0.06)'}}>
+          <div style={{display:'flex',alignItems:'center',gap:10}}>
+            <div style={{width:28,height:28,background:'#C9A84C',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+              <span style={{fontSize:12,color:'#1C1C1C',fontWeight:700}}>S</span>
             </div>
-            <div className="flex-1 w-full sm:w-auto max-w-xs">
-              <input
-                type="number"
-                value={newRate}
-                onChange={e => setNewRate(e.target.value)}
-                className="w-full border border-[#C9A84C] bg-transparent px-4 py-2 font-body text-sm outline-none focus:border-dark transition-colors"
-              />
-            </div>
-            <button
-              onClick={handleUpdateGoldRate}
-              className="px-6 py-2.5 bg-dark text-[#FAFAF7] font-body uppercase tracking-widest text-xs hover:bg-[#C9A84C] hover:text-dark transition-colors duration-300 w-full sm:w-auto"
-            >
-              Update Rate
+            {!collapsed && <div>
+              <div style={{color:'#FAFAF7',fontSize:12,fontWeight:600,letterSpacing:'0.05em'}}>Shreeva</div>
+              <div style={{color:'rgba(255,255,255,0.3)',fontSize:9,letterSpacing:'0.12em',textTransform:'uppercase'}}>Admin Console</div>
+            </div>}
+            <button onClick={() => setCollapsed(c => !c)} style={{marginLeft:'auto',background:'none',border:'none',color:'rgba(255,255,255,0.3)',cursor:'pointer',fontSize:14,flexShrink:0}}>
+              {collapsed ? '›' : '‹'}
             </button>
           </div>
-          <p className="font-body text-[11px] text-dark/50 mt-3">
-            Changing the gold rate recalculates all product prices instantly — no database updates needed.
-          </p>
         </div>
 
-        {/* Product Table */}
-        <div className="border border-[#C9A84C] overflow-hidden bg-white">
-          <div className="px-4 sm:px-6 py-4 border-b border-[#C9A84C] flex items-center justify-between">
-            <p className="font-body text-xs uppercase tracking-widest text-[#C9A84C]">Product Inventory</p>
-            <span className="font-body text-xs text-dark/50">{products.length} items</span>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left min-w-[700px]">
-              <thead>
-                <tr className="border-b border-[#C9A84C]">
-                  <th className="font-body text-xs uppercase tracking-widest text-[#C9A84C] px-4 py-3 w-14">Image</th>
-                  <th className="font-body text-xs uppercase tracking-widest text-[#C9A84C] px-4 py-3">Name</th>
-                  <th className="font-body text-xs uppercase tracking-widest text-[#C9A84C] px-4 py-3">Category</th>
-                  <th className="font-body text-xs uppercase tracking-widest text-[#C9A84C] px-4 py-3">Weight</th>
-                  <th className="font-body text-xs uppercase tracking-widest text-[#C9A84C] px-4 py-3">Making</th>
-                  <th className="font-body text-xs uppercase tracking-widest text-[#C9A84C] px-4 py-3">Price</th>
-                  <th className="font-body text-xs uppercase tracking-widest text-[#C9A84C] px-4 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {products.map(p => (
-                  <tr key={p._id} className="border-b border-[#C9A84C]/20 hover:bg-[#FAFAF7] transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="w-10 h-10 border border-[#C9A84C]/40 overflow-hidden">
-                        <img
-                          src={p.image_url || ''}
-                          alt={p.name}
-                          className="w-full h-full object-cover"
-                          onError={(e) => { e.target.onerror = null; e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0iI0ZBRkFGNyIvPjwvc3ZnPg==' }}
-                        />
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 font-body text-sm text-dark whitespace-nowrap">{p.name}</td>
-                    <td className="px-4 py-3 font-body text-sm text-dark">{p.category}</td>
-                    <td className="px-4 py-3 font-body text-sm text-dark">{p.weight}g</td>
-                    <td className="px-4 py-3 font-body text-sm text-dark">{formatPrice(p.making_charges)}</td>
-                    <td className="px-4 py-3 font-body text-sm text-dark font-medium whitespace-nowrap">{formatPrice(p.final_price)}</td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-3">
-                        <button onClick={() => openModal(p)} className="font-body text-xs uppercase tracking-wider text-[#C9A84C] hover:underline transition-all">Edit</button>
-                        <button onClick={() => handleDelete(p._id)} className="font-body text-xs uppercase tracking-wider text-red-600 hover:underline transition-all">Delete</button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {products.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center font-body text-sm text-dark/50">
-                      No products found. Click "Add Product" to create one.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
+        <nav style={{flex:1,padding:'12px 0'}}>
+          {NAV.map(n => (
+            <button key={n.id} className={`adm-nav-btn${view===n.id?' active':''}`} onClick={() => setView(n.id)}>
+              <span className="adm-nav-icon">{n.icon}</span>
+              {!collapsed && n.label}
+            </button>
+          ))}
+        </nav>
 
-      {/* Add/Edit Modal */}
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-start justify-end bg-dark/30 backdrop-blur-sm transition-opacity duration-300">
-          <div className="w-full max-w-lg h-full overflow-y-auto bg-[#FAFAF7] border-l border-[#C9A84C] shadow-none transition-transform duration-500 ease-out">
-            <div className="p-6 sm:p-8">
-              {/* Modal Header */}
-              <div className="flex items-center justify-between mb-8">
-                <h2 className="font-heading text-2xl font-bold text-dark">
-                  {editingProduct ? 'Edit Product' : 'Add Product'}
-                </h2>
-                <button
-                  onClick={closeModal}
-                  className="font-body text-2xl text-dark/40 hover:text-dark transition-colors leading-none"
-                  aria-label="Close"
-                >
-                  ×
-                </button>
+        <div style={{padding:'16px',borderTop:'1px solid rgba(255,255,255,0.06)'}}>
+          <button onClick={handleLogout} className="adm-nav-btn" style={{color:'rgba(255,255,255,0.3)',padding:'10px 20px'}}>
+            <span className="adm-nav-icon" style={{color:'rgba(255,255,255,0.3)'}}>⏻</span>
+            {!collapsed && 'Logout'}
+          </button>
+          <Link
+            to="/"
+            style={{
+              display:'flex', alignItems:'center', gap:10,
+              padding:'8px 20px', textDecoration:'none',
+              color:'rgba(255,255,255,0.2)', fontFamily:"'Jost',sans-serif",
+              fontSize:11, letterSpacing:'0.12em', textTransform:'uppercase',
+              transition:'color 0.2s', whiteSpace:'nowrap',
+            }}
+            onMouseEnter={e => e.currentTarget.style.color = 'rgba(201,168,76,0.6)'}
+            onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.2)'}
+          >
+            <span style={{fontSize:12, flexShrink:0}}>↗</span>
+            {!collapsed && 'View Site'}
+          </Link>
+        </div>
+      </aside>
+
+      {/* Main */}
+      <main className="adm-main">
+        <header className="adm-header">
+          <div>
+            <nav aria-label="Admin breadcrumb" style={{display:'flex',alignItems:'center',gap:6}}>
+              <Link
+                to="/"
+                style={{fontFamily:"'Jost',sans-serif",fontSize:11,letterSpacing:'0.1em',textTransform:'uppercase',color:'rgba(28,28,28,0.3)',textDecoration:'none',transition:'color 0.2s'}}
+                onMouseEnter={e=>e.currentTarget.style.color='#C9A84C'}
+                onMouseLeave={e=>e.currentTarget.style.color='rgba(28,28,28,0.3)'}
+              >Site</Link>
+              <span style={{color:'rgba(201,168,76,0.4)',fontSize:10}}>/</span>
+              <span style={{fontFamily:"'Jost',sans-serif",fontSize:11,letterSpacing:'0.1em',textTransform:'uppercase',color:'rgba(28,28,28,0.35)',cursor:'default'}}>Admin</span>
+              <span style={{color:'rgba(201,168,76,0.4)',fontSize:10}}>/</span>
+              <span style={{fontFamily:"'Jost',sans-serif",fontSize:11,letterSpacing:'0.1em',textTransform:'uppercase',color:'#C9A84C'}}>
+                {NAV.find(n => n.id === view)?.label}
+              </span>
+            </nav>
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:12}}>
+            <div style={{width:7,height:7,borderRadius:'50%',background:'#22c55e'}} />
+            <span style={{fontSize:11,color:'rgba(28,28,28,0.45)',letterSpacing:'0.08em'}}>LIVE</span>
+            <div style={{width:1,height:16,background:'rgba(201,168,76,0.2)',margin:'0 4px'}} />
+            <div style={{display:'flex',alignItems:'center',gap:8}}>
+              <div style={{width:30,height:30,borderRadius:'50%',background:'#1C1C1C',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                <span style={{color:'#C9A84C',fontSize:12,fontWeight:600}}>{(admin.username||'A')[0].toUpperCase()}</span>
               </div>
-
-              {/* Modal Error */}
-              {error && modalOpen && (
-                <div className="mb-6 border border-red-200 bg-red-50 px-4 py-3">
-                  <p className="font-body text-sm text-red-800">{error}</p>
-                </div>
-              )}
-
-              <form onSubmit={handleSubmit} className="space-y-5">
-                <div>
-                  <label className="block font-body text-xs uppercase tracking-widest text-[#C9A84C] mb-2">Product Name</label>
-                  <input name="name" value={form.name} onChange={handleChange} placeholder="e.g. Royal Gold Ring" required className="w-full border border-[#C9A84C] bg-transparent px-4 py-2.5 font-body text-sm outline-none focus:border-dark transition-colors" />
-                </div>
-
-                <div>
-                  <label className="block font-body text-xs uppercase tracking-widest text-[#C9A84C] mb-2">Category</label>
-                  <input name="category" value={form.category} onChange={handleChange} placeholder="e.g. Rings, Necklaces" required className="w-full border border-[#C9A84C] bg-transparent px-4 py-2.5 font-body text-sm outline-none focus:border-dark transition-colors" />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block font-body text-xs uppercase tracking-widest text-[#C9A84C] mb-2">Weight (g)</label>
-                    <input name="weight" type="number" step="0.01" value={form.weight} onChange={handleChange} placeholder="0.00" required className="w-full border border-[#C9A84C] bg-transparent px-4 py-2.5 font-body text-sm outline-none focus:border-dark transition-colors" />
-                  </div>
-                  <div>
-                    <label className="block font-body text-xs uppercase tracking-widest text-[#C9A84C] mb-2">Making Charges (₹)</label>
-                    <input name="making_charges" type="number" value={form.making_charges} onChange={handleChange} placeholder="0" required className="w-full border border-[#C9A84C] bg-transparent px-4 py-2.5 font-body text-sm outline-none focus:border-dark transition-colors" />
-                  </div>
-                </div>
-
-                {/* Image Uploads */}
-                <div>
-                  <ImageUpload
-                    label="Product Image"
-                    value={form.image_url}
-                    onChange={(url) => setForm({ ...form, image_url: url })}
-                    onError={setError}
-                  />
-                </div>
-                <div>
-                  <ImageUpload
-                    label="Hover Image (Model)"
-                    value={form.hover_image_url}
-                    onChange={(url) => setForm({ ...form, hover_image_url: url })}
-                    onError={setError}
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-body text-xs uppercase tracking-widest text-[#C9A84C] mb-2">Description</label>
-                  <textarea name="description" value={form.description} onChange={handleChange} placeholder="Describe the product..." rows="3" className="w-full border border-[#C9A84C] bg-transparent px-4 py-2.5 font-body text-sm outline-none focus:border-dark transition-colors resize-none" />
-                </div>
-
-                <div className="flex gap-3 pt-2">
-                  <button
-                    type="submit"
-                    className="flex-1 px-6 py-3 bg-dark text-[#FAFAF7] font-body uppercase tracking-widest text-xs hover:bg-[#C9A84C] hover:text-dark transition-colors duration-300"
-                  >
-                    {editingProduct ? 'Update Product' : 'Add Product'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={closeModal}
-                    className="px-6 py-3 border border-[#C9A84C] font-body uppercase tracking-widest text-xs hover:bg-dark hover:text-[#FAFAF7] transition-colors duration-300"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
+              <span style={{fontSize:12,color:'#1C1C1C',fontWeight:500}}>{admin.username || 'Admin'}</span>
             </div>
           </div>
+        </header>
+
+        <div className="adm-content">
+          <ActiveView onNavigate={setView} />
         </div>
-      )}
+      </main>
     </div>
   )
 }

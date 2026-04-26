@@ -8,7 +8,8 @@ export default function FilterBar({ onFilterChange }) {
 
   const handleCategory = (cat) => {
     setActiveCategory(cat)
-    onFilterChange({ category: cat === 'All' ? '' : cat, sort })
+    // DB stores category in lowercase — pass lowercase for filtering
+    onFilterChange({ category: cat === 'All' ? '' : cat.toLowerCase(), sort })
   }
 
   const handleSort = (e) => {
