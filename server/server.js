@@ -29,8 +29,9 @@ const app = express();
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
-  /\.vercel\.app$/,          // any Vercel preview/prod URL
-  process.env.CLIENT_URL,   // set this in Railway env to your exact Vercel URL
+  'https://shreeva-1.onrender.com',   // backend itself (health checks)
+  /\.vercel\.app$/,                   // all Vercel preview + prod URLs
+  process.env.CLIENT_URL,             // exact Vercel URL once known
 ].filter(Boolean)
 
 app.use(cors({
